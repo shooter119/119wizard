@@ -1,0 +1,27 @@
+{
+  "api_keys": {
+    "amap": "5f239feb347f84172494c3664a007102",
+    "qweather": "6e9fd4db0b9a4c4ca8163e17aecc5cc0",
+    "zhipu": "d3547ae340664514bdc95be031da7ebd.oO1Pw06atRfRYYpF"
+  },
+  "amap": {
+    "endpoint": "https://restapi.amap.com",
+    "status": "verified",
+    "tested_at": "2026-02-01",
+    "apis": {
+      "geocode": "/v3/geocode/geo",
+      "regeocode": "/v3/geocode/regeo",
+      "direction": "/v3/direction/driving",
+      "traffic": "/v3/traffic/status",
+      "weather": "/v3/weather/weatherInfo"
+    }
+  },
+  "qweather": {
+    "endpoint": "https://m97p435htr.re.qweatherapi.com/v7"
+  },
+  "weather": {
+    "provider": "qweather",
+    "adcode": "330825",
+    "location": "龙游县"
+  }
+}

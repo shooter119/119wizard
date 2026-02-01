@@ -1,0 +1,19 @@
+# 忽略文件
+.DS_Store
+*.log
+*.pyc
+__pycache__/
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# 临时文件
+*.tmp
+*.bak
+
+# 敏感配置（如需要）
+# config.json

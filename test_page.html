@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>警情出动提示生成</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 深色模式样式 */
+        .dark {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e5e5e5;
+            --text-secondary: #a3a3a3;
+            --border-color: #404040;
+        }
+
+        .dark body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .dark .bg-white {
+            background-color: var(--bg-secondary) !important;
+        }
+
+        .dark .text-gray-700,
+        .dark .text-gray-600,
+        .dark .text-gray-500 {
+            color: var(--text-secondary) !important;
+        }
+
+        .dark .border-gray-300 {
+            border-color: var(--border-color) !important;
+        }
+
+        .dark textarea {
+            background-color: #1a1a1a !important;
+            color: #e5e5e5 !important;
+            border-color: #404040 !important;
+        }
+
+        /* 加载动画 */
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* 拖拽上传区域 */
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover {
+            border-color: #3b82f6;
+            background-color: #f0f9ff;
+        }
+
+        .upload-zone.dragover {
+            border-color: #3b82f6;
+            background-color: #dbeafe;
+        }
+
+        .dark .upload-zone {
+            border-color: #4b5563;
+        }
+
+        .dark .upload-zone:hover {
+            background-color: #1e3a5f;
+        }
+
+        /* 预览图片 */
+        .preview-image {
+            width: 150px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .preview-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        /* 选项卡样式 */
+        .tab-btn {
+            padding: 12px 24px;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            color: #3b82f6;
+        }
+
+        .tab-btn.active {
+            color: #3b82f6;
+            border-bottom-color: #3b82f6;
+        }
+
+        .dark .tab-btn {
+            color: #9ca3af;
+        }
+
+        .dark .tab-btn.active {
+            color: #60a5fa;
+            border-bottom-color: #60a5fa;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 移动端响应式样式 */
+        @media (max-width: 640px) {
+            .container {
+                padding: 12px !important;
+            }
+
+            h1 {
+                font-size: 1.25rem !important;
+            }
+
+            .subtitle {
+                font-size: 0.75rem !important;
+            }
+
+            .tab-btn {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+
+            .upload-zone {
+                padding: 1rem;
+            }
+
+            .upload-zone .text-4xl {
+                font-size: 1.5rem;
+            }
+
+            .btn-main {
+                padding: 10px 16px !important;
+                font-size: 14px !important;
+            }
+
+            .btn-secondary {
+                padding: 10px 12px !important;
+                font-size: 14px !important;
+            }
+
+            .card-padding {
+                padding: 12px !important;
+            }
+
+            .result-title {
+                font-size: 1rem !important;
+            }
+
+            .result-area {
+                min-height: 200px !important;
+                font-size: 13px !important;
+            }
+
+            .tip-box {
+                padding: 8px !important;
+                font-size: 12px !important;
+            }
+
+            textarea {
+                height: 120px !important;
+                font-size: 14px !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 标题栏 -->
+        <div class="flex justify-between items-center mb-4 sm:mb-8">
+            <div>
+                <h1 class="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">🚨 警情出动提示生成</h1>
+                <p class="subtitle text-gray-600 mt-1 text-sm sm:text-base">拍照或输入文字自动生成提示</p>
+            </div>
+            <button id="darkModeToggle"
+                class="px-2 py-1 sm:px-4 sm:py-2 text-sm bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 transition">
+                🌙
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 输入区域 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                <!-- 选项卡 -->
+                <div class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                    <button class="tab-btn active" data-tab="screenshot">📸 拍照识别</button>
+                    <button class="tab-btn" data-tab="text">📝 文字输入</button>
+                </div>
+
+                <!-- 截图上传内容 -->
+                <div id="screenshot-tab" class="tab-content active">
+                    <!-- 拍照/上传选择区域 -->
+                    <div id="uploadZone"
+                        class="upload-zone mb-4 bg-gray-50 dark:bg-gray-900/50 border-2 border-dashed border-gray-300 dark:border-gray-600 p-6 rounded-xl text-center">
+                        <div class="flex flex-col items-center justify-center space-y-4">
+                            <div class="text-5xl mb-2">📸</div>
+                            <div class="flex flex-wrap justify-center gap-4">
+                                <!-- 拍照按钮 -->
+                                <button type="button" onclick="document.getElementById('cameraInput').click()"
+                                    class="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all shadow-md active:scale-95 text-sm sm:text-base">
+                                    <span>📸 直接拍照</span>
+                                </button>
+                                <!-- 从本地选择 -->
+                                <button type="button" onclick="document.getElementById('fileInput').click()"
+                                    class="flex items-center space-x-2 px-6 py-3 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-all shadow-sm active:scale-95 text-sm sm:text-base">
+                                    <span>📁 从相册选择</span>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">支持单张拍照或多张照片批量识别</p>
+                        </div>
+                        <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+                        <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+                    </div>
+
+                    <!-- 预览区域 -->
+                    <div id="previewArea" class="flex flex-wrap gap-3 mb-4">
+                    </div>
+
+                    <!-- 提示信息 -->
+                    <div class="p-3 bg-blue-50 dark:bg-blue-900 rounded-lg text-sm mb-4">
+                        <p class="text-blue-700 dark:text-blue-300">
+                            💡 建议同时拍摄/上传"案件详情"和"出动力量"两个页面的照片。
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 文字输入内容 -->
+                <div id="text-tab" class="tab-content">
+                    <textarea id="textInput"
+                        class="w-full h-64 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm sm:text-base"
+                        placeholder="请粘贴出警信息"></textarea>
+
+                    <div class="p-3 bg-green-50 dark:bg-green-900 rounded-lg text-sm mt-4">
+                        <p class="text-green-700 dark:text-green-300">
+                            💡 支持输入包含指挥员、通信员、安全员、通信装备等详细信息。
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 按钮 -->
+                <div class="flex gap-2 sm:gap-3 mt-3 sm:mt-4">
+                    <button id="submitBtn" onclick="generate()"
+                        class="btn-main flex-1 bg-blue-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-md hover:bg-blue-700 transition font-medium flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base">
+                        <span id="btnText">🔍 生成</span>
+                        <div id="loading" class="spinner ml-2 hidden"></div>
+                    </button>
+                    <button onclick="clearAll()"
+                        class="btn-secondary px-4 sm:px-6 py-2 sm:py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition font-medium text-sm sm:text-base">
+                        清空
+                    </button>
+                </div>
+            </div>
+
+            <!-- 输出区域 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 card-padding">
+                <div class="flex justify-between items-center mb-3 sm:mb-4">
+                    <h2 class="result-title text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">📄 结果</h2>
+                    <button id="copyBtn" onclick="copyResult()"
+                        class="px-3 py-1 sm:px-4 sm:py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition text-xs sm:text-sm font-medium hidden">
+                        📋 复制
+                    </button>
+                </div>
+
+                <div id="resultArea"
+                    class="text-gray-700 dark:text-gray-300 min-h-[300px] sm:min-h-[400px] whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 rounded border border-gray-200 dark:border-gray-700 overflow-auto text-xs sm:text-sm leading-relaxed">
+                    <p class="text-gray-400 text-center py-16">请拍摄照片或输入出警信息</p>
+                </div>
+
+                <!-- 错误提示 -->
+                <div id="error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700 hidden">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedFiles = [];
+        let currentTab = 'screenshot';
+
+        // 深色模式切换
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        let isDarkMode = false;
+
+        darkModeToggle.addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            document.documentElement.classList.toggle('dark', isDarkMode);
+            darkModeToggle.textContent = isDarkMode ? '☀️ 浅色模式' : '🌙 深色模式';
+        });
+
+        // 选项卡切换
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                currentTab = tab;
+
+                // 更新选项卡按钮状态
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // 更新内容显示
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(tab + '-tab').classList.add('active');
+
+                // 更新按钮文字
+                document.getElementById('btnText').textContent =
+                    tab === 'screenshot' ? '🔍 生成' : '📝 生成';
+            });
+        });
+
+        // 文件上传区域事件
+        const cameraInput = document.getElementById('cameraInput');
+        const fileInput = document.getElementById('fileInput');
+
+        // 修改：禁止点击 uploadZone 触发 fileInput，因为现在里面有按钮了
+        // uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+            addFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            addFiles(files);
+            // 重置 input 以允许再次选择同一张图
+            fileInput.value = '';
+        });
+
+        cameraInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            addFiles(files);
+            cameraInput.value = '';
+        });
+
+        function addFiles(files) {
+            files.forEach(file => {
+                if (!uploadedFiles.some(f => f.name === file.name)) {
+                    uploadedFiles.push(file);
+                }
+            });
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const previewArea = document.getElementById('previewArea');
+            previewArea.innerHTML = '';
+
+            uploadedFiles.forEach((file, index) => {
+                const container = document.createElement('div');
+                container.className = 'preview-container';
+
+                const img = document.createElement('img');
+                img.className = 'preview-image';
+                img.src = URL.createObjectURL(file);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = '×';
+                removeBtn.onclick = () => removeFile(index);
+
+                container.appendChild(img);
+                container.appendChild(removeBtn);
+                previewArea.appendChild(container);
+            });
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            updatePreview();
+        }
+
+        function clearAll() {
+            uploadedFiles = [];
+            updatePreview();
+            document.getElementById('textInput').value = '';
+            document.getElementById('resultArea').innerHTML = '<p class="text-gray-400 text-center py-16">请拍摄照片或输入出警信息</p>';
+            document.getElementById('copyBtn').classList.add('hidden');
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        async function generate() {
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            const loading = document.getElementById('loading');
+            const resultDiv = document.getElementById('resultArea');
+            const errorDiv = document.getElementById('error');
+
+            // 显示加载状态
+            loading.classList.remove('hidden');
+            submitBtn.disabled = true;
+            errorDiv.classList.add('hidden');
+
+            try {
+                let response;
+
+                if (currentTab === 'screenshot') {
+                    // 拍照模式
+                    if (uploadedFiles.length === 0) {
+                        throw new Error('请先选择或拍摄照片');
+                    }
+
+                    btnText.textContent = '识别中...';
+
+                    const formData = new FormData();
+                    uploadedFiles.forEach(file => {
+                        formData.append('images', file);
+                    });
+
+                    response = await fetch('/api/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    // 文字模式
+                    const text = document.getElementById('textInput').value.trim();
+                    if (!text) {
+                        throw new Error('请输入警情描述文字');
+                    }
+
+                    btnText.textContent = '生成中...';
+
+                    response = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ text })
+                    });
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    resultDiv.textContent = data.result;
+                    document.getElementById('copyBtn').classList.remove('hidden');
+                } else {
+                    errorDiv.textContent = '❌ ' + data.error;
+                    errorDiv.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                errorDiv.textContent = '❌ ' + error.message;
+                errorDiv.classList.remove('hidden');
+            } finally {
+                btnText.textContent = '🔍 生成';
+                loading.classList.add('hidden');
+                submitBtn.disabled = false;
+            }
+        }
+
+        function copyResult() {
+            const resultText = document.getElementById('resultArea').textContent;
+
+            // 尝试使用现代 Clipboard API
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(resultText).then(() => {
+                    showCopySuccess();
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(resultText);
+                });
+            } else {
+                // 回退到传统的 execCommand 方法
+                fallbackCopy(resultText);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+
+            // 确保文本区域不可见但存在于文档中
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess();
+                } else {
+                    console.error('Fallback: Copying text command was unsuccessful');
+                    alert('复制失败，请手动复制');
+                }
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+                alert('复制失败，请手动复制');
+            }
+
+            document.body.removeChild(textArea);
+        }
+
+        function showCopySuccess() {
+            const copyBtn = document.getElementById('copyBtn');
+            // 保存原始文本（防止多次点击覆盖）
+            if (!copyBtn.dataset.originalText) {
+                copyBtn.dataset.originalText = copyBtn.textContent;
+            }
+
+            copyBtn.textContent = '✅ 已复制';
+
+            // 清除之前的定时器（防止多次点击导致闪烁）
+            if (copyBtn.dataset.timeoutId) {
+                clearTimeout(copyBtn.dataset.timeoutId);
+            }
+
+            const timeoutId = setTimeout(() => {
+                copyBtn.textContent = copyBtn.dataset.originalText || '📋 复制';
+                delete copyBtn.dataset.originalText;
+            }, 2000);
+
+            copyBtn.dataset.timeoutId = timeoutId;
+        }
+    </script>
+</body>
+
+</html>
