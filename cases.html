@@ -306,6 +306,11 @@
       return Array.isArray(arr) ? arr.join(",") : "";
     }
 
+    function getContentValue(content, key) {
+      if (!content || typeof content !== "object") return "";
+      return content[key];
+    }
+
     function buildCategoryOptions(items) {
       const set = new Set(items.map(i => i.category).filter(Boolean));
       const sel = document.getElementById("category");
@@ -321,7 +326,7 @@
     function countContent(content) {
       const stats = {};
       CONTENT_KEYS.forEach(([key]) => {
-        const value = content?.[key];
+        const value = getContentValue(content, key);
         if (Array.isArray(value)) {
           stats[key] = value.filter(Boolean).length;
         } else if (typeof value === "string") {
@@ -428,7 +433,10 @@
     }
 
     function buildItemFromCard(card) {
-      const get = (k) => card.querySelector(`[data-k="${k}"]`)?.value || "";
+      const get = (k) => {
+        const el = card.querySelector(`[data-k="${k}"]`);
+        return el ? (el.value || "") : "";
+      };
       return {
         id: get("id").trim(),
         name: get("name").trim(),
@@ -575,17 +583,17 @@
             <div class="form-row">
               <div class="field">
                 <div class="label">安全提示与灾害特点</div>
-                <input data-k="safety_and_hazard_characteristics" placeholder="安全提示与灾害特点" value="${item.content?.safety_and_hazard_characteristics || ""}" />
+                <input data-k="safety_and_hazard_characteristics" placeholder="安全提示与灾害特点" value="${(item.content && item.content.safety_and_hazard_characteristics) || ""}" />
               </div>
               <div class="field">
                 <div class="label">处置流程和战术</div>
-                <input data-k="response_process_and_tactics" placeholder="处置流程和战术" value="${item.content?.response_process_and_tactics || ""}" />
+                <input data-k="response_process_and_tactics" placeholder="处置流程和战术" value="${(item.content && item.content.response_process_and_tactics) || ""}" />
               </div>
             </div>
             <div class="form-row">
               <div class="field">
                 <div class="label">特别提醒</div>
-                <input data-k="special_reminders" placeholder="特别提醒" value="${item.content?.special_reminders || ""}" />
+                <input data-k="special_reminders" placeholder="特别提醒" value="${(item.content && item.content.special_reminders) || ""}" />
               </div>
             </div>
           `;
