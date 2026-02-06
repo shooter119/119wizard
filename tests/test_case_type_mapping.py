@@ -10,10 +10,11 @@ class TestCaseTypeMapping(unittest.TestCase):
 
         for case_item in case_types[:10]:
             name = case_item.get("name", "")
+            expected = app.format_case_type_display(case_item)
             with self.subTest(case_type=name):
                 result = app.local_keyword_match(f"现场发生{name}", case_types)
                 self.assertIsNotNone(result)
-                self.assertEqual(result["case_type_name"], name)
+                self.assertEqual(result["case_type_name"], expected)
 
 
 if __name__ == "__main__":

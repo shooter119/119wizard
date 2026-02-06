@@ -74,11 +74,58 @@ def build_case_type_catalog(case_types, max_keywords=8):
         catalog.append({
             "id": item.get("id", ""),
             "name": item.get("name", ""),
+            "display_name": format_case_type_display(item),
             "category": item.get("category", ""),
+            "subcategory": item.get("subcategory", ""),
             "aliases": item.get("aliases", [])[:5],
             "keywords": item.get("keywords", [])[:max_keywords]
         })
     return catalog
+
+def format_case_type_display(item):
+    subcategory = (item.get("subcategory") or "").strip()
+    if subcategory:
+        return subcategory
+    category = (item.get("category") or "").strip()
+    name = (item.get("name") or "").strip()
+    if category and name:
+        return f"{category}-{name}"
+    return name
+
+def normalize_case_type_match(match, case_types):
+    if not isinstance(match, dict):
+        return {}
+
+    by_id = {str(item.get("id", "")): item for item in case_types}
+    by_name = {}
+    for item in case_types:
+        names = {
+            str(item.get("name", "")).strip(),
+            str(item.get("subcategory", "")).strip(),
+            format_case_type_display(item).strip(),
+        }
+        for alias in item.get("aliases") or []:
+            names.add(str(alias).strip())
+        for n in names:
+            if n:
+                by_name[n] = item
+
+    picked = None
+    case_type_id = str(match.get("case_type_id", "")).strip()
+    case_type_name = str(match.get("case_type_name", "")).strip()
+    if case_type_id and case_type_id in by_id:
+        picked = by_id[case_type_id]
+    elif case_type_name and case_type_name in by_name:
+        picked = by_name[case_type_name]
+
+    normalized = dict(match)
+    if picked:
+        normalized["case_type_id"] = picked.get("id", "")
+        normalized["case_type_name_raw"] = picked.get("name", "")
+        normalized["case_type_name"] = format_case_type_display(picked)
+        normalized["case_type_category"] = picked.get("category", "")
+        normalized["case_type_subcategory"] = picked.get("subcategory", "")
+    return normalized
 
 def local_keyword_match(text, case_types):
     best = None
@@ -99,7 +146,10 @@ def local_keyword_match(text, case_types):
         return None
     return {
         "case_type_id": best.get("id", ""),
-        "case_type_name": best.get("name", ""),
+        "case_type_name": format_case_type_display(best),
+        "case_type_name_raw": best.get("name", ""),
+        "case_type_category": best.get("category", ""),
+        "case_type_subcategory": best.get("subcategory", ""),
         "confidence": 0.45,
         "rationale": "本地关键词匹配兜底",
         "matched_keywords": [k for k in (best.get("keywords") or []) if k in text]
@@ -369,7 +419,9 @@ def case_types_api():
             case_list.append({
                 "id": item.get("id", ""),
                 "name": item.get("name", ""),
+                "display_name": format_case_type_display(item),
                 "category": item.get("category", ""),
+                "subcategory": item.get("subcategory", ""),
                 "aliases": item.get("aliases", []),
                 "keywords": item.get("keywords", []),
                 "priority": item.get("priority", ""),
@@ -404,6 +456,7 @@ def case_types_save():
                 "id": case_id,
                 "name": name,
                 "category": (item.get("category") or "").strip(),
+                "subcategory": (item.get("subcategory") or "").strip(),
                 "aliases": item.get("aliases") or [],
                 "keywords": item.get("keywords") or [],
                 "priority": (item.get("priority") or "").strip(),
@@ -448,6 +501,7 @@ def llm_classify():
         llm_result, raw = call_llm_classify(text, case_types)
 
         if llm_result:
+            llm_result = normalize_case_type_match(llm_result, case_types)
             return jsonify({
                 "success": True,
                 "source": "llm",
@@ -487,6 +541,9 @@ def llm_analyze():
             return jsonify({"success": False, "error": "模型无有效JSON输出", "raw": raw or ""}), 500
 
         case_obj = llm_result.get("case") or {}
+        match = normalize_case_type_match(llm_result.get("case_type_match") or {}, case_types)
+        if match.get("case_type_name"):
+            case_obj["case_type"] = match.get("case_type_name")
         address_match, matched_village = match_address_to_contacts(case_obj.get("address", ""))
         missing = evaluate_completeness(case_obj)
         is_complete = len(missing) == 0
@@ -495,7 +552,7 @@ def llm_analyze():
             "success": True,
             "source": "llm",
             "case": case_obj,
-            "case_type_match": llm_result.get("case_type_match") or {},
+            "case_type_match": match,
             "is_complete": is_complete,
             "missing_fields": missing,
             "address_match": address_match,
@@ -520,6 +577,9 @@ def llm_generate():
             return jsonify({"success": False, "error": "模型无有效JSON输出", "raw": raw or ""}), 500
 
         case_obj = llm_result.get("case") or {}
+        match = normalize_case_type_match(llm_result.get("case_type_match") or {}, case_types)
+        if match.get("case_type_name"):
+            case_obj["case_type"] = match.get("case_type_name")
         address_match, matched_village = match_address_to_contacts(case_obj.get("address", ""))
         missing = evaluate_completeness(case_obj)
         is_complete = len(missing) == 0
@@ -532,7 +592,7 @@ def llm_generate():
             "source": "llm",
             "alert": alert_text,
             "case": case_obj,
-            "case_type_match": llm_result.get("case_type_match") or {},
+            "case_type_match": match,
             "is_complete": is_complete,
             "missing_fields": missing,
             "address_match": address_match,
@@ -602,7 +662,7 @@ def llm_generate_images():
 
         case_obj = llm_result.get("case") or {}
         case_obj = merge_case_with_alert_info(case_obj, alert_info)
-        match = llm_result.get("case_type_match") or {}
+        match = normalize_case_type_match(llm_result.get("case_type_match") or {}, case_types)
         if match.get("case_type_name"):
             case_obj["case_type"] = match.get("case_type_name")
 
