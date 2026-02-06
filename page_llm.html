@@ -284,6 +284,22 @@
             }
         }
 
+        async function readApiResponse(resp) {
+            const rawText = await resp.text();
+            let data = null;
+            try {
+                data = rawText ? JSON.parse(rawText) : {};
+            } catch (e) {
+                const preview = (rawText || "").slice(0, 120).replace(/\s+/g, " ");
+                throw new Error(`接口返回非JSON（HTTP ${resp.status}）：${preview || "空响应"}`);
+            }
+            if (!resp.ok) {
+                const msg = (data && (data.error || data.message)) || `HTTP ${resp.status}`;
+                throw new Error(msg);
+            }
+            return data || {};
+        }
+
         clearBtn.addEventListener('click', () => {
             textInput.value = '';
             uploadedFiles = [];
@@ -398,7 +414,7 @@
                     });
                 }
 
-                const data = await resp.json();
+                const data = await readApiResponse(resp);
                 if (data.success) {
                     const result = data.case_type_match || {};
                     sourceTag.textContent = `来源：${data.source || '-'}`;
