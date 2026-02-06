@@ -60,6 +60,15 @@ CONTACT_VILLAGES = load_contacts_villages()
 
 LOG_PATH = os.path.join(BASE_DIR, 'data', 'llm_logs.jsonl')
 
+FIRE_HINT_TERMS = (
+    "火灾", "起火", "着火", "冒烟", "燃烧", "阴燃", "明火", "爆燃", "爆炸", "自燃"
+)
+
+DOOR_RESCUE_TERMS = (
+    "开门", "开锁", "反锁", "门打不开", "忘带钥匙",
+    "老人被困", "小孩被困", "被困家中", "室内被困", "困在家里"
+)
+
 def log_llm_event(payload):
     try:
         os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
@@ -191,13 +200,81 @@ def repair_llm_json(raw, schema_hint=""):
     content = response.choices[0].message.content
     return parse_llm_json(content)
 
-def compose_text_from_alert_info(alert_info):
+def compose_text_from_alert_info(alert_info, include_case_type=True):
     parts = []
-    for key in ['station', 'case_level', 'report_time', 'address', 'case_type', 'case_description']:
+    keys = ['station', 'case_level', 'report_time', 'address', 'case_description']
+    if include_case_type:
+        keys.insert(4, 'case_type')
+    for key in keys:
         value = alert_info.get(key, '')
         if value:
             parts.append(str(value))
     return '，'.join(parts)
+
+
+def _contains_any(text, terms):
+    if not text:
+        return False
+    return any(t in text for t in terms)
+
+
+def sanitize_alert_info_for_images(alert_info):
+    """图片模式下，清洗视觉抽取结果，避免将臆测 case_type 直接喂给分类。"""
+    cleaned = dict(alert_info or {})
+    desc = str(cleaned.get("case_description") or "")
+    addr = str(cleaned.get("address") or "")
+    case_type = str(cleaned.get("case_type") or "")
+    corpus = f"{desc} {addr}"
+    has_fire = _contains_any(corpus, FIRE_HINT_TERMS)
+    has_door = _contains_any(corpus, DOOR_RESCUE_TERMS)
+    if case_type and ("火" in case_type or "火灾" in case_type) and has_door and not has_fire:
+        cleaned["case_type"] = ""
+    return cleaned
+
+
+def apply_image_mode_case_guard(case_obj, match, case_types, extracted_info=None):
+    """
+    图片模式纠偏：
+    若文本体现“开门/被困家中”且无火情词，禁止落到火灾类，强制归到“开门”。
+    """
+    obj = dict(case_obj or {})
+    normalized_match = dict(match or {})
+    extracted = extracted_info or {}
+    evidence_text = " ".join([
+        str(extracted.get("case_description") or ""),
+        str(extracted.get("address") or ""),
+        str(extracted.get("case_type") or ""),
+    ])
+    case_text = " ".join([
+        str(obj.get("case_description") or ""),
+        str(obj.get("address") or ""),
+    ])
+    has_fire = _contains_any(evidence_text, FIRE_HINT_TERMS)
+    has_door = _contains_any(f"{evidence_text} {case_text}", DOOR_RESCUE_TERMS)
+    if not (has_door and not has_fire):
+        return obj, normalized_match
+
+    door_case = None
+    for item in case_types:
+        if str(item.get("id") or "") == "social_assistance_door":
+            door_case = item
+            break
+    if not door_case:
+        return obj, normalized_match
+
+    matched_keywords = [k for k in (door_case.get("keywords") or []) if k and k in f"{evidence_text} {case_text}"][:6]
+    forced = {
+        "case_type_id": "social_assistance_door",
+        "case_type_name_raw": door_case.get("name", ""),
+        "case_type_name": format_case_type_display(door_case),
+        "case_type_category": door_case.get("category", ""),
+        "case_type_subcategory": door_case.get("subcategory", ""),
+        "confidence": 0.88,
+        "rationale": "检测到开门/被困家中语义且无火情词，按开门社会救助纠偏",
+        "matched_keywords": matched_keywords
+    }
+    obj["case_type"] = forced["case_type_name"]
+    return obj, forced
 
 def merge_case_with_alert_info(case_obj, alert_info):
     merged = dict(case_obj or {})
@@ -645,15 +722,31 @@ def llm_generate_images():
 
         alert_info = analyze_screenshot(temp_paths)
 
-        if not alert_info or 'error' in alert_info:
-            return jsonify({"success": False, "error": "截图分析失败"}), 500
+        if not alert_info:
+            return jsonify({"success": False, "error": "截图分析失败：未返回识别结果"}), 500
+        if 'error' in alert_info:
+            return jsonify({
+                "success": False,
+                "error": f"截图分析失败：{alert_info.get('error')}"
+            }), 500
         if 'parse_error' in alert_info:
-            return jsonify({"success": False, "error": "截图解析失败"}), 500
+            return jsonify({
+                "success": False,
+                "error": f"截图解析失败：{alert_info.get('parse_error')}"
+            }), 500
 
-        # 组装文本并交给 LLM 完成匹配与结构化
-        text = compose_text_from_alert_info(alert_info)
+        # 图片模式：清洗视觉抽取结果，不把抽取到的 case_type 作为强依据
+        sanitized_alert_info = sanitize_alert_info_for_images(alert_info)
+
+        # 组装文本并交给 LLM 完成匹配与结构化（不包含 case_type）
+        text = compose_text_from_alert_info(sanitized_alert_info, include_case_type=False)
         if not text:
-            return jsonify({"success": False, "error": "未能从截图中提取有效文本"}), 500
+            return jsonify({
+                "success": False,
+                "error": "未能从截图中提取有效文本，请上传包含“案件详情/出动力量”的清晰截图",
+                "alert_info": alert_info,
+                "sanitized_alert_info": sanitized_alert_info
+            }), 500
 
         case_types = load_case_types()
         llm_result, raw = call_llm_extract(text, case_types)
@@ -661,10 +754,13 @@ def llm_generate_images():
             return jsonify({"success": False, "error": "模型无有效JSON输出", "raw": raw or ""}), 500
 
         case_obj = llm_result.get("case") or {}
-        case_obj = merge_case_with_alert_info(case_obj, alert_info)
+        case_obj = merge_case_with_alert_info(case_obj, sanitized_alert_info)
         match = normalize_case_type_match(llm_result.get("case_type_match") or {}, case_types)
         if match.get("case_type_name"):
             case_obj["case_type"] = match.get("case_type_name")
+        case_obj, match = apply_image_mode_case_guard(
+            case_obj, match, case_types, extracted_info=sanitized_alert_info
+        )
 
         address_match, matched_village = match_address_to_contacts(case_obj.get("address", ""))
         missing = evaluate_completeness(case_obj)
@@ -691,7 +787,8 @@ def llm_generate_images():
             "mode": "images",
             "input": {
                 "images": [os.path.basename(p) for p in temp_paths],
-                "extracted": alert_info
+                "extracted": alert_info,
+                "sanitized_extracted": sanitized_alert_info
             },
             "case": case_obj,
             "case_type_match": response_payload["case_type_match"],
