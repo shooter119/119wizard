@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>灾害类型查询</title>
+  <style>
+    :root {
+      --bg: #f7f6f2;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --muted: #6b6b6b;
+      --accent: #2b5c7a;
+      --border: #e6e2d9;
+      --chip: #f1efe7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    h1 { font-size: 20px; margin: 0; }
+    .nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin: 12px 0 16px;
+    }
+    .controls input, .controls select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: #fff;
+    }
+    .controls button {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    .stat {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .kpi .label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .kpi .value {
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .kpi .sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+    }
+    .title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+    .content-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #f7f8fb;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge strong { color: var(--text); }
+    details {
+      margin-top: 10px;
+      border-top: 1px dashed var(--border);
+      padding-top: 8px;
+    }
+    summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+    ul { margin: 6px 0 0 16px; padding: 0; }
+    li { font-size: 13px; color: var(--text); line-height: 1.6; }
+    .form {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .inline-form {
+      border-top: 1px dashed var(--border);
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .form-row input, .form-row textarea, .form-row select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .form-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .form-actions button {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: transparent;
+    }
+    .btn-ghost {
+      background: #fff;
+      color: var(--accent);
+    }
+    .edit-btn {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      padding: 4px 8px;
+      cursor: pointer;
+      color: var(--accent);
+    }
+    @media (min-width: 640px) {
+      h1 { font-size: 22px; }
+      .controls { grid-template-columns: 1fr 180px 180px 120px; }
+      .form-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>灾害类型查询</h1>
+      <div class="nav"><a href="/">返回主页</a></div>
+    </header>
+
+    <div class="controls">
+      <input id="q" type="search" placeholder="搜索名称 / 关键词 / 别名 / 类别" />
+      <select id="category">
+        <option value="">全部类别</option>
+      </select>
+      <select id="contentFilter">
+        <option value="">内容完整性：全部</option>
+        <option value="complete">内容完整（五类齐全）</option>
+        <option value="missing">内容缺失（任一缺少）</option>
+        <option value="handling">有处置要点</option>
+        <option value="safety">有安全提示</option>
+        <option value="warning">有特别警示</option>
+        <option value="characteristic">有灾害特性</option>
+        <option value="tactic">有作战要则</option>
+      </select>
+      <button id="newBtn" type="button">新增类型</button>
+    </div>
+
+    <div class="summary" id="summary"></div>
+    <div class="form" id="form" style="display:none;">
+      <div class="meta" id="formTitle" style="margin-bottom:8px;">新增灾害类型</div>
+      <div class="form-row">
+        <input id="name" placeholder="名称（中文）" />
+        <input id="nameEn" placeholder="英文名（用于生成 id）" />
+      </div>
+      <div class="form-row">
+        <input id="id" placeholder="id（自动生成，可修改）" />
+        <input id="categoryInput" placeholder="类别（如：火灾 / 救援）" />
+      </div>
+      <div class="form-row">
+        <input id="priority" placeholder="priority（如：normal / critical）" />
+        <input id="aliases" placeholder="别名（英文逗号分隔）" />
+      </div>
+      <div class="form-row">
+        <input id="keywords" placeholder="关键词（英文逗号分隔）" />
+        <input id="contentHandling" placeholder="处置要点（英文逗号分隔）" />
+      </div>
+      <div class="form-row">
+        <input id="contentSafety" placeholder="安全提示（英文逗号分隔）" />
+        <input id="contentWarnings" placeholder="特别警示（英文逗号分隔）" />
+      </div>
+      <div class="form-row">
+        <input id="contentCharacteristics" placeholder="灾害特性（英文逗号分隔）" />
+        <input id="contentTactics" placeholder="作战要则（英文逗号分隔）" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="saveBtn" type="button">保存</button>
+        <button class="btn-ghost" id="cancelBtn" type="button">取消</button>
+      </div>
+    </div>
+
+    <div class="stat" id="stat">加载中…</div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const state = { all: [], filtered: [] };
+    let editingId = null;
+
+    const CONTENT_KEYS = [
+      ["handling_points", "处置要点"],
+      ["safety_tips", "安全提示"],
+      ["warnings", "特别警示"],
+      ["characteristics", "灾害特性"],
+      ["tactics", "作战要则"]
+    ];
+
+    function normalize(s) {
+      return (s || "").toString().trim().toLowerCase();
+    }
+
+    function slugify(input) {
+      return normalize(input)
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    }
+
+    function csvToArray(value) {
+      return (value || "")
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    function arrayToCsv(arr) {
+      return Array.isArray(arr) ? arr.join(",") : "";
+    }
+
+    function buildCategoryOptions(items) {
+      const set = new Set(items.map(i => i.category).filter(Boolean));
+      const sel = document.getElementById("category");
+      sel.innerHTML = `<option value="">全部类别</option>`;
+      [...set].sort().forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        sel.appendChild(opt);
+      });
+    }
+
+    function countContent(content) {
+      const stats = {};
+      CONTENT_KEYS.forEach(([key]) => {
+        const arr = content?.[key];
+        stats[key] = Array.isArray(arr) ? arr.length : 0;
+      });
+      stats.total = CONTENT_KEYS.reduce((sum, [key]) => sum + (stats[key] || 0), 0);
+      stats.complete = CONTENT_KEYS.every(([key]) => (stats[key] || 0) > 0);
+      return stats;
+    }
+
+    function renderSummary(items) {
+      const total = items.length;
+      const categories = new Set(items.map(i => i.category).filter(Boolean));
+      const contentTotals = {
+        handling_points: 0,
+        safety_tips: 0,
+        warnings: 0,
+        characteristics: 0,
+        tactics: 0
+      };
+      let completeCount = 0;
+      items.forEach(item => {
+        const stats = countContent(item.content || {});
+        if (stats.complete) completeCount += 1;
+        Object.keys(contentTotals).forEach(key => {
+          contentTotals[key] += stats[key] || 0;
+        });
+      });
+      const summary = document.getElementById("summary");
+      summary.innerHTML = `
+        <div class="kpi">
+          <div class="label">灾害类型总数</div>
+          <div class="value">${total}</div>
+          <div class="sub">类别数：${categories.size || 0}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">内容完整度</div>
+          <div class="value">${completeCount}</div>
+          <div class="sub">五类内容齐全</div>
+        </div>
+        <div class="kpi">
+          <div class="label">处置要点条目</div>
+          <div class="value">${contentTotals.handling_points}</div>
+          <div class="sub">安全提示：${contentTotals.safety_tips}</div>
+        </div>
+        <div class="kpi">
+          <div class="label">特性 / 要则 / 警示</div>
+          <div class="value">${contentTotals.characteristics}</div>
+          <div class="sub">作战要则：${contentTotals.tactics} · 警示：${contentTotals.warnings}</div>
+        </div>
+      `;
+    }
+
+    function filterList() {
+      const q = normalize(document.getElementById("q").value);
+      const cat = document.getElementById("category").value;
+      const contentFilter = document.getElementById("contentFilter").value;
+      state.filtered = state.all.filter(item => {
+        if (cat && item.category !== cat) return false;
+        if (contentFilter) {
+          const stats = countContent(item.content || {});
+          if (contentFilter === "complete" && !stats.complete) return false;
+          if (contentFilter === "missing" && stats.complete) return false;
+          if (contentFilter === "handling" && stats.handling_points === 0) return false;
+          if (contentFilter === "safety" && stats.safety_tips === 0) return false;
+          if (contentFilter === "warning" && stats.warnings === 0) return false;
+          if (contentFilter === "characteristic" && stats.characteristics === 0) return false;
+          if (contentFilter === "tactic" && stats.tactics === 0) return false;
+        }
+        if (!q) return true;
+        const hay = [
+          item.name,
+          item.category,
+          ...(item.aliases || []),
+          ...(item.keywords || [])
+        ].map(normalize).join(" ");
+        return hay.includes(q);
+      });
+      render();
+    }
+
+    function closeForm() {
+      document.getElementById("form").style.display = "none";
+      editingId = null;
+    }
+
+    function buildItemFromForm() {
+      const name = document.getElementById("name").value.trim();
+      const nameEn = document.getElementById("nameEn").value.trim();
+      let id = document.getElementById("id").value.trim();
+      if (!id && nameEn) id = slugify(nameEn);
+      return {
+        id,
+        name,
+        category: document.getElementById("categoryInput").value.trim(),
+        priority: document.getElementById("priority").value.trim(),
+        aliases: csvToArray(document.getElementById("aliases").value),
+        keywords: csvToArray(document.getElementById("keywords").value),
+        content: {
+          handling_points: csvToArray(document.getElementById("contentHandling").value),
+          safety_tips: csvToArray(document.getElementById("contentSafety").value),
+          warnings: csvToArray(document.getElementById("contentWarnings").value),
+          characteristics: csvToArray(document.getElementById("contentCharacteristics").value),
+          tactics: csvToArray(document.getElementById("contentTactics").value)
+        }
+      };
+    }
+
+    function buildItemFromCard(card) {
+      const get = (k) => card.querySelector(`[data-k="${k}"]`)?.value || "";
+      return {
+        id: get("id").trim(),
+        name: get("name").trim(),
+        category: get("category").trim(),
+        priority: get("priority").trim(),
+        aliases: csvToArray(get("aliases")),
+        keywords: csvToArray(get("keywords")),
+        content: {
+          handling_points: csvToArray(get("handling_points")),
+          safety_tips: csvToArray(get("safety_tips")),
+          warnings: csvToArray(get("warnings")),
+          characteristics: csvToArray(get("characteristics")),
+          tactics: csvToArray(get("tactics"))
+        }
+      };
+    }
+
+    async function saveAll() {
+      const res = await fetch("/api/case-types/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cases: state.all })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error || "保存失败");
+      }
+    }
+
+    function render() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      document.getElementById("stat").textContent = `共 ${state.filtered.length} 条`;
+      renderSummary(state.filtered);
+
+      state.filtered.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "title-row";
+        titleRow.innerHTML = `
+          <div class="title">${item.name || "-"}</div>
+          <div class="meta">${item.category || "未分类"} · ${item.priority || "normal"} · ${item.id || ""}</div>
+        `;
+        card.appendChild(titleRow);
+
+        const contentStats = countContent(item.content || {});
+        const badges = document.createElement("div");
+        badges.className = "content-badges";
+        CONTENT_KEYS.forEach(([key, label]) => {
+          const span = document.createElement("span");
+          span.className = "badge";
+          span.innerHTML = `${label} <strong>${contentStats[key] || 0}</strong>`;
+          badges.appendChild(span);
+        });
+        card.appendChild(badges);
+
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        (item.aliases || []).slice(0, 6).forEach(a => {
+          const span = document.createElement("span");
+          span.className = "chip";
+          span.textContent = a;
+          chips.appendChild(span);
+        });
+        (item.keywords || []).slice(0, 8).forEach(k => {
+          const span = document.createElement("span");
+          span.className = "chip";
+          span.textContent = k;
+          chips.appendChild(span);
+        });
+        if (chips.childNodes.length) card.appendChild(chips);
+
+        const content = item.content || {};
+        if (Object.keys(content).length) {
+          const details = document.createElement("details");
+          details.innerHTML = `<summary>查看内容详情</summary>`;
+          CONTENT_KEYS.forEach(([key, label]) => {
+            const arr = content[key];
+            if (Array.isArray(arr) && arr.length) {
+              const h = document.createElement("div");
+              h.style.marginTop = "6px";
+              h.innerHTML = `<div class="meta" style="font-weight:600">${label}</div>`;
+              const ul = document.createElement("ul");
+              arr.slice(0, 10).forEach(t => {
+                const li = document.createElement("li");
+                li.textContent = t;
+                ul.appendChild(li);
+              });
+              h.appendChild(ul);
+              details.appendChild(h);
+            }
+          });
+          card.appendChild(details);
+        }
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "edit-btn";
+        editBtn.textContent = editingId === item.id ? "正在编辑" : "编辑";
+        editBtn.addEventListener("click", () => {
+          editingId = item.id;
+          render();
+        });
+        card.appendChild(editBtn);
+
+        if (editingId === item.id) {
+          const inline = document.createElement("div");
+          inline.className = "inline-form";
+          inline.innerHTML = `
+            <div class="form-row">
+              <div class="field">
+                <div class="label">名称（中文）</div>
+                <input data-k="name" placeholder="名称（中文）" value="${item.name || ""}" />
+              </div>
+              <div class="field">
+                <div class="label">id（可修改）</div>
+                <input data-k="id" placeholder="id（可修改）" value="${item.id || ""}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <div class="label">类别</div>
+                <input data-k="category" placeholder="类别" value="${item.category || ""}" />
+              </div>
+              <div class="field">
+                <div class="label">priority</div>
+                <input data-k="priority" placeholder="priority" value="${item.priority || ""}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <div class="label">别名（英文逗号分隔）</div>
+                <input data-k="aliases" placeholder="别名（英文逗号分隔）" value="${arrayToCsv(item.aliases)}" />
+              </div>
+              <div class="field">
+                <div class="label">关键词（英文逗号分隔）</div>
+                <input data-k="keywords" placeholder="关键词（英文逗号分隔）" value="${arrayToCsv(item.keywords)}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <div class="label">处置要点（英文逗号分隔）</div>
+                <input data-k="handling_points" placeholder="处置要点（英文逗号分隔）" value="${arrayToCsv(item.content?.handling_points)}" />
+              </div>
+              <div class="field">
+                <div class="label">安全提示（英文逗号分隔）</div>
+                <input data-k="safety_tips" placeholder="安全提示（英文逗号分隔）" value="${arrayToCsv(item.content?.safety_tips)}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <div class="label">特别警示（英文逗号分隔）</div>
+                <input data-k="warnings" placeholder="特别警示（英文逗号分隔）" value="${arrayToCsv(item.content?.warnings)}" />
+              </div>
+              <div class="field">
+                <div class="label">灾害特性（英文逗号分隔）</div>
+                <input data-k="characteristics" placeholder="灾害特性（英文逗号分隔）" value="${arrayToCsv(item.content?.characteristics)}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <div class="label">作战要则（英文逗号分隔）</div>
+                <input data-k="tactics" placeholder="作战要则（英文逗号分隔）" value="${arrayToCsv(item.content?.tactics)}" />
+              </div>
+            </div>
+          `;
+
+          const actions = document.createElement("div");
+          actions.className = "form-actions";
+          const saveBtn = document.createElement("button");
+          saveBtn.className = "btn-primary";
+          saveBtn.textContent = "保存";
+          saveBtn.addEventListener("click", async () => {
+            const updated = buildItemFromCard(inline);
+            if (!updated.name || !updated.id) {
+              alert("名称和 id 不能为空");
+              return;
+            }
+            const idx = state.all.findIndex(i => i.id === item.id);
+            if (idx >= 0) state.all[idx] = updated;
+            editingId = null;
+            filterList();
+            await saveAll();
+          });
+          const cancelBtn = document.createElement("button");
+          cancelBtn.className = "btn-ghost";
+          cancelBtn.textContent = "取消";
+          cancelBtn.addEventListener("click", () => {
+            editingId = null;
+            render();
+          });
+          actions.appendChild(saveBtn);
+          actions.appendChild(cancelBtn);
+          inline.appendChild(actions);
+          card.appendChild(inline);
+        }
+
+        list.appendChild(card);
+      });
+    }
+
+    async function init() {
+      try {
+        const res = await fetch("/api/case-types");
+        const data = await res.json();
+        state.all = data.cases || [];
+        state.filtered = state.all;
+        buildCategoryOptions(state.all);
+        render();
+      } catch (e) {
+        document.getElementById("stat").textContent = "加载失败";
+      }
+    }
+
+    document.getElementById("q").addEventListener("input", filterList);
+    document.getElementById("category").addEventListener("change", filterList);
+    document.getElementById("contentFilter").addEventListener("change", filterList);
+    document.getElementById("newBtn").addEventListener("click", () => {
+      document.getElementById("form").style.display = "block";
+      document.getElementById("formTitle").textContent = "新增灾害类型";
+      document.getElementById("name").value = "";
+      document.getElementById("nameEn").value = "";
+      document.getElementById("id").value = "";
+      document.getElementById("categoryInput").value = "";
+      document.getElementById("priority").value = "";
+      document.getElementById("aliases").value = "";
+      document.getElementById("keywords").value = "";
+      document.getElementById("contentHandling").value = "";
+      document.getElementById("contentSafety").value = "";
+      document.getElementById("contentWarnings").value = "";
+      document.getElementById("contentCharacteristics").value = "";
+      document.getElementById("contentTactics").value = "";
+    });
+    document.getElementById("cancelBtn").addEventListener("click", closeForm);
+    document.getElementById("nameEn").addEventListener("input", (e) => {
+      const idInput = document.getElementById("id");
+      if (!idInput.value.trim()) idInput.value = slugify(e.target.value);
+    });
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      const item = buildItemFromForm();
+      if (!item.name) {
+        alert("名称不能为空");
+        return;
+      }
+      if (!item.id) {
+        alert("英文名生成的 id 不能为空");
+        return;
+      }
+      const exists = state.all.find(i => i.id === item.id);
+      if (editingId) {
+        const idx = state.all.findIndex(i => i.id === editingId);
+        if (idx >= 0) state.all[idx] = item;
+      } else if (exists) {
+        alert("id 已存在，请修改英文名或手动改 id");
+        return;
+      } else {
+        state.all.unshift(item);
+      }
+      closeForm();
+      buildCategoryOptions(state.all);
+      filterList();
+      await saveAll();
+    });
+    init();
+  </script>
+</body>
+</html>

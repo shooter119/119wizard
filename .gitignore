@@ -14,6 +14,11 @@ venv/
 # 临时文件
 *.tmp
 *.bak
+*.bak_*
+*.jsonl
 
 # 敏感配置（如需要）
 # config.json
+
+# Runtime artifacts
+data/llm_logs.jsonl

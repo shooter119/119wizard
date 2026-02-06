@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>联系人查询</title>
+  <style>
+    :root {
+      --bg: #f7f6f2;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --muted: #6b6b6b;
+      --accent: #2b5c7a;
+      --border: #e6e2d9;
+      --chip: #f1efe7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    h1 { font-size: 20px; margin: 0; }
+    .nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin: 12px 0 16px;
+    }
+    .controls input, .controls select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: #fff;
+    }
+    .stat {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+    }
+    .title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .meta { font-size: 12px; color: var(--muted); }
+    .chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+    .phone {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      word-break: break-all;
+    }
+    @media (min-width: 640px) {
+      h1 { font-size: 22px; }
+      .controls { grid-template-columns: 1fr 180px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>联系人查询</h1>
+      <div class="nav"><a href="/">返回主页</a></div>
+    </header>
+
+    <div class="controls">
+      <input id="q" type="search" placeholder="搜索姓名 / 村社 / 乡镇 / 电话 / 职务" />
+      <select id="township">
+        <option value="">全部乡镇</option>
+      </select>
+    </div>
+
+    <div class="stat" id="stat">加载中…</div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const state = { all: [], filtered: [] };
+
+    function normalize(s) {
+      return (s || "").toString().trim().toLowerCase();
+    }
+
+    function buildTownshipOptions(items) {
+      const set = new Set(items.map(i => i.township).filter(Boolean));
+      const sel = document.getElementById("township");
+      [...set].sort().forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        sel.appendChild(opt);
+      });
+    }
+
+    function filterList() {
+      const q = normalize(document.getElementById("q").value);
+      const township = document.getElementById("township").value;
+      state.filtered = state.all.filter(item => {
+        if (township && item.township !== township) return false;
+        if (!q) return true;
+        const hay = [
+          item.name,
+          item.village,
+          item.township,
+          item.phone,
+          item.position
+        ].map(normalize).join(" ");
+        return hay.includes(q);
+      });
+      render();
+    }
+
+    function render() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      document.getElementById("stat").textContent =
+        `共 ${state.filtered.length} 条`;
+
+      state.filtered.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "title-row";
+        titleRow.innerHTML = `
+          <div class="title">${item.name || "-"}</div>
+          <div class="meta">${item.position || "联系人"}</div>
+        `;
+        card.appendChild(titleRow);
+
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        if (item.township) {
+          const span = document.createElement("span");
+          span.className = "chip";
+          span.textContent = item.township;
+          chips.appendChild(span);
+        }
+        if (item.village) {
+          const span = document.createElement("span");
+          span.className = "chip";
+          span.textContent = item.village;
+          chips.appendChild(span);
+        }
+        if (chips.childNodes.length) card.appendChild(chips);
+
+        const phone = document.createElement("div");
+        phone.style.marginTop = "8px";
+        phone.innerHTML = item.phone
+          ? `<a class="phone" href="tel:${item.phone}">${item.phone}</a>`
+          : `<span class="meta">无电话</span>`;
+        card.appendChild(phone);
+
+        list.appendChild(card);
+      });
+    }
+
+    async function init() {
+      try {
+        const res = await fetch("/data/contacts.json");
+        const data = await res.json();
+        state.all = Array.isArray(data) ? data : [];
+        state.filtered = state.all;
+        buildTownshipOptions(state.all);
+        render();
+      } catch (e) {
+        document.getElementById("stat").textContent = "加载失败";
+      }
+    }
+
+    document.getElementById("q").addEventListener("input", filterList);
+    document.getElementById("township").addEventListener("change", filterList);
+    init();
+  </script>
+</body>
+</html>

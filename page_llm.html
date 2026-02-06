@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>119Wizard LLM 灾害类型判定</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --ink: #0d1b2a;
+            --muted: #5b6875;
+            --brand: #f26b3a;
+            --brand-2: #2a9d8f;
+            --paper: #f7f4ef;
+            --panel: #ffffff;
+            --ring: rgba(242, 107, 58, 0.35);
+        }
+        body {
+            font-family: "Space Grotesk", "Noto Serif SC", system-ui, sans-serif;
+            background:
+              radial-gradient(1200px 800px at 10% -10%, #ffe7d6 0%, transparent 60%),
+              radial-gradient(900px 600px at 100% 0%, #d6f4f0 0%, transparent 50%),
+              linear-gradient(180deg, #f9f6f1 0%, #f0efe9 100%);
+            color: var(--ink);
+        }
+        .nav-link {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid #eee5da;
+            background: #fffaf3;
+        }
+        .nav-link:hover {
+            border-color: var(--brand);
+            color: var(--ink);
+        }
+        .btn-main {
+            background: var(--brand) !important;
+        }
+        .btn-main:hover {
+            background: #e86133 !important;
+        }
+        .panel {
+            border: 1px solid #eee5da;
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 16px 32px rgba(13, 27, 42, 0.08);
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            border: 1px solid #eee5da;
+            background: #fffdf8;
+            color: #5a4635;
+        }
+        .result-box {
+            border: 1px dashed #e7e0d6;
+            background: #fffefc;
+            border-radius: 14px;
+            padding: 14px;
+            min-height: 160px;
+            white-space: pre-wrap;
+            font-size: 13px;
+        }
+        .muted {
+            color: var(--muted);
+        }
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+        details.fold {
+            border: 1px dashed #e7e0d6;
+            border-radius: 14px;
+            background: #fffefc;
+            padding: 10px 12px;
+        }
+        details.fold summary {
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--muted);
+            list-style: none;
+        }
+        details.fold summary::-webkit-details-marker { display: none; }
+        details.fold[open] summary { margin-bottom: 8px; }
+        .tab-btn {
+            padding: 10px 18px;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn.active {
+            color: var(--brand);
+            border-bottom-color: var(--brand);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .preview-image {
+            width: 120px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+        .preview-container {
+            position: relative;
+            display: inline-block;
+        }
+        .remove-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 22px;
+            height: 22px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .back-to-top {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            background: #0d1b2a;
+            color: #fff;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 12px;
+            box-shadow: 0 12px 24px rgba(13, 27, 42, 0.25);
+            display: none;
+            z-index: 40;
+        }
+        .back-to-top:hover {
+            background: #14283f;
+        }
+        @media (max-width: 640px) {
+            .result-box {
+                min-height: 140px;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <div>
+                <h1 class="text-xl sm:text-3xl font-bold">🧠 LLM 灾害类型判定</h1>
+                <div class="text-sm text-gray-500 mt-1">
+                    <a href="/cases" class="nav-link mr-2">灾害类型查询</a>
+                    <a href="/contacts" class="nav-link">联系人查询</a>
+                </div>
+                <p class="muted text-sm mt-2">使用大模型将警情描述映射到现有灾害类型库。</p>
+            </div>
+            <span id="statusPill" class="pill">等待输入</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="panel p-6">
+                <div class="flex border-b border-gray-200 mb-4">
+                    <button class="tab-btn active" data-tab="text">文字输入</button>
+                    <button class="tab-btn" data-tab="screenshot">拍照识别</button>
+                </div>
+
+                <div id="text-tab" class="tab-content active">
+                    <label class="text-sm font-medium">警情描述</label>
+                    <textarea id="textInput"
+                        class="w-full h-40 mt-3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                        placeholder="请输入报警描述，如：报警人说车子起火"></textarea>
+                </div>
+
+                <div id="screenshot-tab" class="tab-content">
+                    <div id="uploadZone" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer bg-gray-50">
+                        <div class="text-4xl mb-2">📸</div>
+                        <div class="text-sm">最多上传3张照片</div>
+                        <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+                    </div>
+                    <div id="previewArea" class="flex flex-wrap gap-3 mt-4"></div>
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button id="submitBtn" class="btn-main flex-1 text-white py-2 rounded-md font-medium">
+                        提交到模型
+                    </button>
+                    <button id="clearBtn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md">清空</button>
+                </div>
+            </div>
+
+            <div class="panel p-6">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="text-sm font-medium">判定结果</div>
+                    <span id="sourceTag" class="pill">来源：-</span>
+                </div>
+                <div id="resultBox" class="result-box muted">等待提交</div>
+                <div class="mt-4">
+                    <div class="text-xs muted" style="display:flex;align-items:center;justify-content:space-between;">
+                        <span>系统输出（最终提示）</span>
+                        <button id="copyAlertBtn" class="pill" style="border-color:#e7e0d6;background:#fff;">复制</button>
+                    </div>
+                    <div id="alertBox" class="result-box mt-2">-</div>
+                </div>
+                <div class="mt-4">
+                    <details class="fold">
+                        <summary>完整信息 / 缺失信息</summary>
+                        <div id="completeBox" class="result-box mono mt-2">-</div>
+                    </details>
+                </div>
+                <div class="mt-4">
+                    <details class="fold">
+                        <summary>原始模型输出（调试）</summary>
+                        <div id="rawBox" class="result-box mono mt-2">-</div>
+                    </details>
+                </div>
+                <div id="errorBox" class="mt-3 text-sm text-red-600 hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <button id="backToTop" class="back-to-top">回到顶部</button>
+
+    <script>
+        const submitBtn = document.getElementById('submitBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const textInput = document.getElementById('textInput');
+        const resultBox = document.getElementById('resultBox');
+        const alertBox = document.getElementById('alertBox');
+        const copyAlertBtn = document.getElementById('copyAlertBtn');
+        const completeBox = document.getElementById('completeBox');
+        const rawBox = document.getElementById('rawBox');
+        const errorBox = document.getElementById('errorBox');
+        const statusPill = document.getElementById('statusPill');
+        const sourceTag = document.getElementById('sourceTag');
+        const backToTop = document.getElementById('backToTop');
+        const fileInput = document.getElementById('fileInput');
+        const uploadZone = document.getElementById('uploadZone');
+        const previewArea = document.getElementById('previewArea');
+        let currentTab = 'text';
+        let uploadedFiles = [];
+
+        function setStatus(text) {
+            statusPill.textContent = text;
+        }
+
+        function resetUI() {
+            resultBox.textContent = '等待提交';
+            resultBox.classList.add('muted');
+            alertBox.textContent = '-';
+            completeBox.textContent = '-';
+            rawBox.textContent = '-';
+            errorBox.classList.add('hidden');
+            sourceTag.textContent = '来源：-';
+            setStatus('等待输入');
+        }
+
+        function setButtonsDisabled(disabled) {
+            submitBtn.disabled = disabled;
+            clearBtn.disabled = disabled;
+            if (disabled) {
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                clearBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                clearBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        clearBtn.addEventListener('click', () => {
+            textInput.value = '';
+            uploadedFiles = [];
+            updatePreview();
+            resetUI();
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                currentTab = tab;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(tab + '-tab').classList.add('active');
+            });
+        });
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('border-blue-400');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('border-blue-400');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('border-blue-400');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+            addFiles(files);
+        });
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            addFiles(files);
+            fileInput.value = '';
+        });
+
+        function addFiles(files) {
+            for (const file of files) {
+                if (uploadedFiles.length >= 3) break;
+                if (!uploadedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                    uploadedFiles.push(file);
+                }
+            }
+            updatePreview();
+        }
+
+        function updatePreview() {
+            previewArea.innerHTML = '';
+            uploadedFiles.forEach((file, index) => {
+                const container = document.createElement('div');
+                container.className = 'preview-container';
+
+                const img = document.createElement('img');
+                img.className = 'preview-image';
+                img.src = URL.createObjectURL(file);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = '×';
+                removeBtn.onclick = () => {
+                    uploadedFiles.splice(index, 1);
+                    updatePreview();
+                };
+
+                container.appendChild(img);
+                container.appendChild(removeBtn);
+                previewArea.appendChild(container);
+            });
+        }
+
+        submitBtn.addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            if (currentTab === 'text' && !text) {
+                errorBox.textContent = '请输入警情描述。';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+            if (currentTab === 'screenshot' && uploadedFiles.length === 0) {
+                errorBox.textContent = '请上传截图。';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+
+            errorBox.classList.add('hidden');
+            setStatus('分析中...');
+            resultBox.textContent = '分析中...';
+            resultBox.classList.remove('muted');
+            alertBox.textContent = '生成中...';
+            completeBox.textContent = '分析中...';
+            rawBox.textContent = '-';
+            sourceTag.textContent = '来源：-';
+            setButtonsDisabled(true);
+
+            try {
+                let resp;
+                if (currentTab === 'text') {
+                    resp = await fetch('/api/llm-generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text })
+                    });
+                } else {
+                    const formData = new FormData();
+                    uploadedFiles.slice(0, 3).forEach(file => {
+                        formData.append('images', file);
+                    });
+                    resp = await fetch('/api/llm-generate-images', {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+
+                const data = await resp.json();
+                if (data.success) {
+                    const result = data.case_type_match || {};
+                    sourceTag.textContent = `来源：${data.source || '-'}`;
+                    resultBox.textContent = [
+                        `类型：${result.case_type_name || ''}`,
+                        `ID：${result.case_type_id || ''}`,
+                        `置信度：${result.confidence != null ? result.confidence : ''}`,
+                        `理由：${result.rationale || ''}`,
+                        `匹配关键词：${Array.isArray(result.matched_keywords) ? result.matched_keywords.join('、') : ''}`
+                    ].join('\\n');
+                    alertBox.textContent = data.alert || '-';
+                    if (data.is_complete) {
+                        completeBox.textContent = JSON.stringify(data.case || {}, null, 2);
+                    } else {
+                        const missing = Array.isArray(data.missing_fields) ? data.missing_fields : [];
+                        completeBox.textContent = `缺失信息：${missing.join('、') || '未知'}`;
+                    }
+                    rawBox.textContent = data.raw || '-';
+                    setStatus('完成');
+                    const target = document.getElementById('alertBox');
+                    if (target && target.scrollIntoView) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                } else {
+                    errorBox.textContent = data.error || '提交失败';
+                    errorBox.classList.remove('hidden');
+                    setStatus('失败');
+                }
+            } catch (err) {
+                errorBox.textContent = err.message;
+                errorBox.classList.remove('hidden');
+                setStatus('失败');
+            } finally {
+                setButtonsDisabled(false);
+            }
+        });
+
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 240) {
+                backToTop.style.display = 'inline-flex';
+            } else {
+                backToTop.style.display = 'none';
+            }
+        });
+
+        backToTop.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        copyAlertBtn.addEventListener('click', async () => {
+            const text = alertBox.textContent || '';
+            if (!text || text === '-') return;
+            try {
+                await navigator.clipboard.writeText(text);
+                const prev = copyAlertBtn.textContent;
+                copyAlertBtn.textContent = '已复制';
+                setTimeout(() => {
+                    copyAlertBtn.textContent = prev;
+                }, 1500);
+            } catch (err) {
+                alert('复制失败，请手动复制');
+            }
+        });
+    </script>
+</body>
+
+</html>

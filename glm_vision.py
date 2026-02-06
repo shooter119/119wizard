@@ -61,6 +61,7 @@ def analyze_screenshot(image_paths):
     content = []
     
     # 添加所有图片
+    valid_image_count = 0
     for image_path in image_paths:
         if os.path.exists(image_path):
             base64_image = encode_image_to_base64(image_path)
@@ -72,11 +73,17 @@ def analyze_screenshot(image_paths):
                     "url": f"data:{mime_type};base64,{base64_image}"
                 }
             })
+            valid_image_count += 1
+
+    if valid_image_count == 0:
+        return {"error": "no valid images provided"}
     
     # 添加提示文字
     content.append({
         "type": "text",
         "text": """请仔细分析这些119消防接警系统的截图，提取所有相关信息。
+
+请只分析“屏幕上显示的内容”，忽略屏幕外的背景、桌面、手、设备或其他物品。
 
 请以JSON格式返回，格式如下：
 ```json
