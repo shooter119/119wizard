@@ -6,6 +6,7 @@ LLM 灾害类型判定服务（独立于现有脚本）
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.exceptions import RequestEntityTooLarge
 import json
 import os
 import re
@@ -34,7 +35,17 @@ _CONFIG = _load_config()
 ZHIPU_API_KEY = _CONFIG.get('api_keys', {}).get('zhipu', '')
 
 app = Flask(__name__)
+# 上传体大小限制（20MB），与 Nginx client_max_body_size 保持一致。
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 CORS(app)
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_entity_too_large(e):
+    return jsonify({
+        "success": False,
+        "error": "上传文件过大（上限20MB）。请压缩图片后重试。"
+    }), 413
 
 def load_case_types():
     case_path = os.path.join(BASE_DIR, 'data', 'fire_cases_complete.json')
