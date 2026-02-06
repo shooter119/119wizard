@@ -276,6 +276,36 @@ def apply_image_mode_case_guard(case_obj, match, case_types, extracted_info=None
     obj["case_type"] = forced["case_type_name"]
     return obj, forced
 
+
+def apply_image_mode_text_guard(case_obj, extracted_info=None):
+    """
+    图片模式文本纠偏：
+    若截图证据中无火情词，则禁止模型在 case_description 中注入“火灾/起火”等内容。
+    """
+    obj = dict(case_obj or {})
+    extracted = extracted_info or {}
+    extracted_desc = str(extracted.get("case_description") or "").strip()
+    extracted_case_type = str(extracted.get("case_type") or "").strip()
+    evidence_text = f"{extracted_desc} {extracted_case_type}".strip()
+    if not evidence_text:
+        return obj
+
+    if _contains_any(evidence_text, FIRE_HINT_TERMS):
+        return obj
+
+    # 无火情证据时，优先采用截图原始描述，避免模型脑补“火灾”。
+    current_desc = str(obj.get("case_description") or "").strip()
+    if extracted_desc:
+        obj["case_description"] = extracted_desc
+    elif _contains_any(current_desc, FIRE_HINT_TERMS):
+        # 没有原始描述可回填时，至少去掉显式火情前缀
+        cleaned = current_desc
+        for term in FIRE_HINT_TERMS:
+            cleaned = cleaned.replace(term, "")
+        cleaned = re.sub(r'^[，,、\\s]+', '', cleaned).strip()
+        obj["case_description"] = cleaned or current_desc
+    return obj
+
 def merge_case_with_alert_info(case_obj, alert_info):
     merged = dict(case_obj or {})
     fields = [
@@ -755,6 +785,7 @@ def llm_generate_images():
 
         case_obj = llm_result.get("case") or {}
         case_obj = merge_case_with_alert_info(case_obj, sanitized_alert_info)
+        case_obj = apply_image_mode_text_guard(case_obj, extracted_info=sanitized_alert_info)
         match = normalize_case_type_match(llm_result.get("case_type_match") or {}, case_types)
         if match.get("case_type_name"):
             case_obj["case_type"] = match.get("case_type_name")
