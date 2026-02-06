@@ -136,33 +136,61 @@ def normalize_case_type_match(match, case_types):
         normalized["case_type_subcategory"] = picked.get("subcategory", "")
     return normalized
 
-def local_keyword_match(text, case_types):
-    best = None
-    best_score = 0
+def rank_case_types_by_keywords(text, case_types, top_k=3):
+    ranked = []
     for item in case_types:
-        name = item.get("name", "")
-        aliases = item.get("aliases") or []
-        keywords = item.get("keywords") or []
+        name = str(item.get("name") or "").strip()
+        aliases = [str(a).strip() for a in (item.get("aliases") or []) if str(a).strip()]
+        keywords = [str(k).strip() for k in (item.get("keywords") or []) if str(k).strip()]
+
         score = 0
+        matched_aliases = [a for a in aliases if a in text]
+        matched_keywords = [k for k in keywords if k in text]
+
         if name and name in text:
-            score += 6
-        score += sum(3 for a in aliases if a and a in text)
-        score += sum(2 for k in keywords if k and k in text)
-        if score > best_score:
-            best_score = score
-            best = item
-    if not best:
+            score += 10
+        score += 6 * len(matched_aliases)
+        score += 4 * len(matched_keywords)
+
+        if score <= 0:
+            continue
+
+        ranked.append({
+            "case_type_id": item.get("id", ""),
+            "case_type_name_raw": item.get("name", ""),
+            "case_type_name": format_case_type_display(item),
+            "case_type_category": item.get("category", ""),
+            "case_type_subcategory": item.get("subcategory", ""),
+            "score": score,
+            "matched_keywords": matched_keywords[:10],
+            "matched_aliases": matched_aliases[:6],
+        })
+
+    ranked.sort(key=lambda x: x["score"], reverse=True)
+    return ranked[:top_k]
+
+
+def build_keyword_match(text, case_types):
+    ranked = rank_case_types_by_keywords(text, case_types, top_k=1)
+    if not ranked:
         return None
+    best = ranked[0]
+    score = best.get("score", 0)
+    confidence = min(0.95, 0.45 + score * 0.02)
     return {
-        "case_type_id": best.get("id", ""),
-        "case_type_name": format_case_type_display(best),
-        "case_type_name_raw": best.get("name", ""),
-        "case_type_category": best.get("category", ""),
-        "case_type_subcategory": best.get("subcategory", ""),
-        "confidence": 0.45,
-        "rationale": "本地关键词匹配兜底",
-        "matched_keywords": [k for k in (best.get("keywords") or []) if k in text]
+        "case_type_id": best.get("case_type_id", ""),
+        "case_type_name": best.get("case_type_name", ""),
+        "case_type_name_raw": best.get("case_type_name_raw", ""),
+        "case_type_category": best.get("case_type_category", ""),
+        "case_type_subcategory": best.get("case_type_subcategory", ""),
+        "confidence": round(confidence, 2),
+        "rationale": "关键词匹配命中",
+        "matched_keywords": best.get("matched_keywords", [])
     }
+
+
+def local_keyword_match(text, case_types):
+    return build_keyword_match(text, case_types)
 
 def parse_llm_json(raw):
     if not raw:
@@ -779,16 +807,32 @@ def llm_generate_images():
             }), 500
 
         case_types = load_case_types()
-        llm_result, raw = call_llm_extract(text, case_types)
-        if not llm_result or not isinstance(llm_result, dict):
-            return jsonify({"success": False, "error": "模型无有效JSON输出", "raw": raw or ""}), 500
+        raw = ""
 
-        case_obj = llm_result.get("case") or {}
-        case_obj = merge_case_with_alert_info(case_obj, sanitized_alert_info)
+        # 阶段1：如实提取（只使用截图抽取结果构造 case）
+        case_obj = merge_case_with_alert_info({}, sanitized_alert_info)
         case_obj = apply_image_mode_text_guard(case_obj, extracted_info=sanitized_alert_info)
-        match = normalize_case_type_match(llm_result.get("case_type_match") or {}, case_types)
+
+        # 阶段2：仅用提取文本做关键词判定
+        classify_text = "，".join([
+            str(case_obj.get("case_description") or ""),
+            str(case_obj.get("address") or "")
+        ]).strip("，")
+        keyword_hits_top3 = rank_case_types_by_keywords(classify_text, case_types, top_k=3)
+        match = build_keyword_match(classify_text, case_types)
+        source = "keyword"
+
+        # 关键词无命中时，才使用 LLM 做兜底分类（不允许改写 case_description）
+        if not match:
+            llm_result, raw = call_llm_classify(classify_text, case_types)
+            match = normalize_case_type_match(llm_result or {}, case_types) if llm_result else {}
+            if not match:
+                match = local_keyword_match(classify_text, case_types) or {}
+            source = "llm" if match else "keyword"
+
         if match.get("case_type_name"):
             case_obj["case_type"] = match.get("case_type_name")
+
         case_obj, match = apply_image_mode_case_guard(
             case_obj, match, case_types, extracted_info=sanitized_alert_info
         )
@@ -802,10 +846,11 @@ def llm_generate_images():
 
         response_payload = {
             "success": True,
-            "source": "llm",
+            "source": source,
             "alert": alert_text,
             "case": case_obj,
             "case_type_match": match,
+            "keyword_hits_top3": keyword_hits_top3,
             "is_complete": is_complete,
             "missing_fields": missing,
             "address_match": address_match,
@@ -823,6 +868,7 @@ def llm_generate_images():
             },
             "case": case_obj,
             "case_type_match": response_payload["case_type_match"],
+            "keyword_hits_top3": keyword_hits_top3,
             "is_complete": is_complete,
             "missing_fields": missing,
             "address_match": address_match,
