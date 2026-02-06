@@ -1274,12 +1274,23 @@ def generate_alert(case_data):
     contact_info = contact_info.rstrip('；')
 
     # 6. 生成最终输出
-    # 构建各个章节内容
-    safety_tips = get_section_content(case_data_info, 'safety_tips')
-    handling_points = get_section_content(case_data_info, 'handling_points')
-    tactics = get_section_content(case_data_info, 'tactics')
-    characteristics = get_section_content(case_data_info, 'characteristics')
-    warnings = get_section_content(case_data_info, 'warnings')
+    # 构建各个章节内容（优先新结构，兼容旧结构）
+    safety_hazard = get_section_content(case_data_info, 'safety_and_hazard_characteristics')
+    if not safety_hazard:
+        safety_tips = get_section_content(case_data_info, 'safety_tips')
+        characteristics = get_section_content(case_data_info, 'characteristics')
+        safety_hazard = '\n'.join([x for x in [safety_tips, characteristics] if x]).strip()
+
+    response_tactics = get_section_content(case_data_info, 'response_process_and_tactics')
+    if not response_tactics:
+        handling_points = get_section_content(case_data_info, 'handling_points')
+        tactics = get_section_content(case_data_info, 'tactics')
+        legacy_handling = format_handling_points(case_data_info) if handling_points else ""
+        response_tactics = '\n'.join([x for x in [legacy_handling, tactics] if x]).strip()
+
+    special_reminders = get_section_content(case_data_info, 'special_reminders')
+    if not special_reminders:
+        special_reminders = get_section_content(case_data_info, 'warnings')
 
     output_lines = []
     output_lines.append("🚨 警情出动提示")
@@ -1341,35 +1352,23 @@ def generate_alert(case_data):
     output_lines.append("🚗 地址路况")
     output_lines.append(route_info)
 
-    # 安全提示
-    if safety_tips:
+    # 安全提示与灾害特点
+    if safety_hazard:
         output_lines.append("")
-        output_lines.append(" ⚠️ 安全提示")
-        output_lines.append(safety_tips)
+        output_lines.append(" ⚠️ 安全提示与灾害特点")
+        output_lines.append(safety_hazard)
 
-    # 处置要点 - 使用数字编号格式
-    if handling_points:
+    # 处置流程和战术
+    if response_tactics:
         output_lines.append("")
-        output_lines.append("📝 处置要点")
-        output_lines.append(format_handling_points(case_data_info))
+        output_lines.append("📝 处置流程和战术")
+        output_lines.append(response_tactics)
 
-    # 作战要则
-    if tactics:
+    # 特别提醒
+    if special_reminders:
         output_lines.append("")
-        output_lines.append(" 🎯 作战要则")
-        output_lines.append(tactics)
-
-    # 灾害特点
-    if characteristics:
-        output_lines.append("")
-        output_lines.append("🔥 灾害特点")
-        output_lines.append(characteristics)
-
-    # 特别警示
-    if warnings:
-        output_lines.append("")
-        output_lines.append("🚫 特别警示")
-        output_lines.append(warnings)
+        output_lines.append("🚫 特别提醒")
+        output_lines.append(special_reminders)
 
     # 联动信息（可选：当地址未命中村/社区时隐藏）
     if case_data.get('_address_match') is False:

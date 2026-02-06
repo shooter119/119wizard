@@ -233,13 +233,11 @@
       </select>
       <select id="contentFilter">
         <option value="">内容完整性：全部</option>
-        <option value="complete">内容完整（五类齐全）</option>
+        <option value="complete">内容完整（三类齐全）</option>
         <option value="missing">内容缺失（任一缺少）</option>
-        <option value="handling">有处置要点</option>
-        <option value="safety">有安全提示</option>
-        <option value="warning">有特别警示</option>
-        <option value="characteristic">有灾害特性</option>
-        <option value="tactic">有作战要则</option>
+        <option value="safety_hazard">有安全提示与灾害特点</option>
+        <option value="response_tactics">有处置流程和战术</option>
+        <option value="special_reminders">有特别提醒</option>
       </select>
       <button id="newBtn" type="button">新增类型</button>
     </div>
@@ -260,16 +258,12 @@
         <input id="aliases" placeholder="别名（英文逗号分隔）" />
       </div>
       <div class="form-row">
-        <input id="keywords" placeholder="关键词（英文逗号分隔）" />
-        <input id="contentHandling" placeholder="处置要点（英文逗号分隔）" />
+        <input id="keywords" placeholder="关键词（中文逗号分隔）" />
+        <input id="contentSafetyHazard" placeholder="安全提示与灾害特点（简短中文）" />
       </div>
       <div class="form-row">
-        <input id="contentSafety" placeholder="安全提示（英文逗号分隔）" />
-        <input id="contentWarnings" placeholder="特别警示（英文逗号分隔）" />
-      </div>
-      <div class="form-row">
-        <input id="contentCharacteristics" placeholder="灾害特性（英文逗号分隔）" />
-        <input id="contentTactics" placeholder="作战要则（英文逗号分隔）" />
+        <input id="contentResponseTactics" placeholder="处置流程和战术（简短中文）" />
+        <input id="contentSpecialReminders" placeholder="特别提醒（简短中文）" />
       </div>
       <div class="form-actions">
         <button class="btn-primary" id="saveBtn" type="button">保存</button>
@@ -286,11 +280,9 @@
     let editingId = null;
 
     const CONTENT_KEYS = [
-      ["handling_points", "处置要点"],
-      ["safety_tips", "安全提示"],
-      ["warnings", "特别警示"],
-      ["characteristics", "灾害特性"],
-      ["tactics", "作战要则"]
+      ["safety_and_hazard_characteristics", "安全提示与灾害特点"],
+      ["response_process_and_tactics", "处置流程和战术"],
+      ["special_reminders", "特别提醒"]
     ];
 
     function normalize(s) {
@@ -329,8 +321,14 @@
     function countContent(content) {
       const stats = {};
       CONTENT_KEYS.forEach(([key]) => {
-        const arr = content?.[key];
-        stats[key] = Array.isArray(arr) ? arr.length : 0;
+        const value = content?.[key];
+        if (Array.isArray(value)) {
+          stats[key] = value.filter(Boolean).length;
+        } else if (typeof value === "string") {
+          stats[key] = value.trim() ? 1 : 0;
+        } else {
+          stats[key] = 0;
+        }
       });
       stats.total = CONTENT_KEYS.reduce((sum, [key]) => sum + (stats[key] || 0), 0);
       stats.complete = CONTENT_KEYS.every(([key]) => (stats[key] || 0) > 0);
@@ -341,11 +339,9 @@
       const total = items.length;
       const categories = new Set(items.map(i => i.category).filter(Boolean));
       const contentTotals = {
-        handling_points: 0,
-        safety_tips: 0,
-        warnings: 0,
-        characteristics: 0,
-        tactics: 0
+        safety_and_hazard_characteristics: 0,
+        response_process_and_tactics: 0,
+        special_reminders: 0
       };
       let completeCount = 0;
       items.forEach(item => {
@@ -365,17 +361,17 @@
         <div class="kpi">
           <div class="label">内容完整度</div>
           <div class="value">${completeCount}</div>
-          <div class="sub">五类内容齐全</div>
+          <div class="sub">三类内容齐全</div>
         </div>
         <div class="kpi">
-          <div class="label">处置要点条目</div>
-          <div class="value">${contentTotals.handling_points}</div>
-          <div class="sub">安全提示：${contentTotals.safety_tips}</div>
+          <div class="label">安全提示与灾害特点</div>
+          <div class="value">${contentTotals.safety_and_hazard_characteristics}</div>
+          <div class="sub">处置流程和战术：${contentTotals.response_process_and_tactics}</div>
         </div>
         <div class="kpi">
-          <div class="label">特性 / 要则 / 警示</div>
-          <div class="value">${contentTotals.characteristics}</div>
-          <div class="sub">作战要则：${contentTotals.tactics} · 警示：${contentTotals.warnings}</div>
+          <div class="label">特别提醒</div>
+          <div class="value">${contentTotals.special_reminders}</div>
+          <div class="sub">用于出警要点提醒</div>
         </div>
       `;
     }
@@ -390,11 +386,9 @@
           const stats = countContent(item.content || {});
           if (contentFilter === "complete" && !stats.complete) return false;
           if (contentFilter === "missing" && stats.complete) return false;
-          if (contentFilter === "handling" && stats.handling_points === 0) return false;
-          if (contentFilter === "safety" && stats.safety_tips === 0) return false;
-          if (contentFilter === "warning" && stats.warnings === 0) return false;
-          if (contentFilter === "characteristic" && stats.characteristics === 0) return false;
-          if (contentFilter === "tactic" && stats.tactics === 0) return false;
+          if (contentFilter === "safety_hazard" && stats.safety_and_hazard_characteristics === 0) return false;
+          if (contentFilter === "response_tactics" && stats.response_process_and_tactics === 0) return false;
+          if (contentFilter === "special_reminders" && stats.special_reminders === 0) return false;
         }
         if (!q) return true;
         const hay = [
@@ -424,13 +418,11 @@
         category: document.getElementById("categoryInput").value.trim(),
         priority: document.getElementById("priority").value.trim(),
         aliases: csvToArray(document.getElementById("aliases").value),
-        keywords: csvToArray(document.getElementById("keywords").value),
+        keywords: csvToArray(document.getElementById("keywords").value.replace(/，/g, ",")),
         content: {
-          handling_points: csvToArray(document.getElementById("contentHandling").value),
-          safety_tips: csvToArray(document.getElementById("contentSafety").value),
-          warnings: csvToArray(document.getElementById("contentWarnings").value),
-          characteristics: csvToArray(document.getElementById("contentCharacteristics").value),
-          tactics: csvToArray(document.getElementById("contentTactics").value)
+          safety_and_hazard_characteristics: document.getElementById("contentSafetyHazard").value.trim(),
+          response_process_and_tactics: document.getElementById("contentResponseTactics").value.trim(),
+          special_reminders: document.getElementById("contentSpecialReminders").value.trim()
         }
       };
     }
@@ -443,13 +435,11 @@
         category: get("category").trim(),
         priority: get("priority").trim(),
         aliases: csvToArray(get("aliases")),
-        keywords: csvToArray(get("keywords")),
+        keywords: csvToArray(get("keywords").replace(/，/g, ",")),
         content: {
-          handling_points: csvToArray(get("handling_points")),
-          safety_tips: csvToArray(get("safety_tips")),
-          warnings: csvToArray(get("warnings")),
-          characteristics: csvToArray(get("characteristics")),
-          tactics: csvToArray(get("tactics"))
+          safety_and_hazard_characteristics: get("safety_and_hazard_characteristics").trim(),
+          response_process_and_tactics: get("response_process_and_tactics").trim(),
+          special_reminders: get("special_reminders").trim()
         }
       };
     }
@@ -516,18 +506,23 @@
           const details = document.createElement("details");
           details.innerHTML = `<summary>查看内容详情</summary>`;
           CONTENT_KEYS.forEach(([key, label]) => {
-            const arr = content[key];
-            if (Array.isArray(arr) && arr.length) {
+            const value = content[key];
+            if (Array.isArray(value) && value.length) {
               const h = document.createElement("div");
               h.style.marginTop = "6px";
               h.innerHTML = `<div class="meta" style="font-weight:600">${label}</div>`;
               const ul = document.createElement("ul");
-              arr.slice(0, 10).forEach(t => {
+              value.slice(0, 10).forEach(t => {
                 const li = document.createElement("li");
                 li.textContent = t;
                 ul.appendChild(li);
               });
               h.appendChild(ul);
+              details.appendChild(h);
+            } else if (typeof value === "string" && value.trim()) {
+              const h = document.createElement("div");
+              h.style.marginTop = "6px";
+              h.innerHTML = `<div class="meta" style="font-weight:600">${label}</div><div>${value}</div>`;
               details.appendChild(h);
             }
           });
@@ -573,34 +568,24 @@
                 <input data-k="aliases" placeholder="别名（英文逗号分隔）" value="${arrayToCsv(item.aliases)}" />
               </div>
               <div class="field">
-                <div class="label">关键词（英文逗号分隔）</div>
-                <input data-k="keywords" placeholder="关键词（英文逗号分隔）" value="${arrayToCsv(item.keywords)}" />
+                <div class="label">关键词（中文逗号分隔）</div>
+                <input data-k="keywords" placeholder="关键词（中文逗号分隔）" value="${arrayToCsv(item.keywords)}" />
               </div>
             </div>
             <div class="form-row">
               <div class="field">
-                <div class="label">处置要点（英文逗号分隔）</div>
-                <input data-k="handling_points" placeholder="处置要点（英文逗号分隔）" value="${arrayToCsv(item.content?.handling_points)}" />
+                <div class="label">安全提示与灾害特点</div>
+                <input data-k="safety_and_hazard_characteristics" placeholder="安全提示与灾害特点" value="${item.content?.safety_and_hazard_characteristics || ""}" />
               </div>
               <div class="field">
-                <div class="label">安全提示（英文逗号分隔）</div>
-                <input data-k="safety_tips" placeholder="安全提示（英文逗号分隔）" value="${arrayToCsv(item.content?.safety_tips)}" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="field">
-                <div class="label">特别警示（英文逗号分隔）</div>
-                <input data-k="warnings" placeholder="特别警示（英文逗号分隔）" value="${arrayToCsv(item.content?.warnings)}" />
-              </div>
-              <div class="field">
-                <div class="label">灾害特性（英文逗号分隔）</div>
-                <input data-k="characteristics" placeholder="灾害特性（英文逗号分隔）" value="${arrayToCsv(item.content?.characteristics)}" />
+                <div class="label">处置流程和战术</div>
+                <input data-k="response_process_and_tactics" placeholder="处置流程和战术" value="${item.content?.response_process_and_tactics || ""}" />
               </div>
             </div>
             <div class="form-row">
               <div class="field">
-                <div class="label">作战要则（英文逗号分隔）</div>
-                <input data-k="tactics" placeholder="作战要则（英文逗号分隔）" value="${arrayToCsv(item.content?.tactics)}" />
+                <div class="label">特别提醒</div>
+                <input data-k="special_reminders" placeholder="特别提醒" value="${item.content?.special_reminders || ""}" />
               </div>
             </div>
           `;
@@ -665,11 +650,9 @@
       document.getElementById("priority").value = "";
       document.getElementById("aliases").value = "";
       document.getElementById("keywords").value = "";
-      document.getElementById("contentHandling").value = "";
-      document.getElementById("contentSafety").value = "";
-      document.getElementById("contentWarnings").value = "";
-      document.getElementById("contentCharacteristics").value = "";
-      document.getElementById("contentTactics").value = "";
+      document.getElementById("contentSafetyHazard").value = "";
+      document.getElementById("contentResponseTactics").value = "";
+      document.getElementById("contentSpecialReminders").value = "";
     });
     document.getElementById("cancelBtn").addEventListener("click", closeForm);
     document.getElementById("nameEn").addEventListener("input", (e) => {

@@ -1,0 +1,16 @@
+[Unit]
+Description=119Wizard Flask Service
+After=network.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_USER__
+WorkingDirectory=__APP_DIR__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__APP_DIR__/venv/bin/gunicorn -c __APP_DIR__/deploy/gunicorn_conf.py app_llm:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
